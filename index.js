@@ -113,7 +113,9 @@ function session(options) {
 
   var isCookieConfigurationSet = opts.cookie !== null;
 
-  var headerName = opts.header ? opts.header.toLowerCase() : null;
+  var headerName = opts.header;
+
+  var headerNameNormalized = headerName? headerName.toLowerCase() : null;
 
   // get the cookie signing secret
   var secret = opts.secret
@@ -261,6 +263,9 @@ function session(options) {
         // touch session
         req.session.touch()
         touched = true
+      }
+      if (headerName) {
+        setHeader(res, headerName, req.sessionID, secret);
       }
     });
 
