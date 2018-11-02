@@ -94,7 +94,7 @@ describe('session()', function(){
       req.session.num = req.session.num || ++count
       res.end('session ' + req.session.num)
     });
-     request(server)
+    request(server)
       .get('/')
       .expect(shouldHaveHeader(header))
       .expect(200, 'session 1', function (err, res) {
@@ -105,12 +105,12 @@ describe('session()', function(){
           .expect(200, 'session 1', done)
       })
   })
-   it('should not respond with cookie if configuration cookie key set as null', function (done) {
+  it('should not respond with cookie if configuration cookie key set as null', function (done) {
     var header = 'X-Session-Token';
     var server = createServer({ header: header, cookie: null }, function (req, res) {
       res.end('session')
     });
-     request(server)
+    request(server)
       .get('/')
       .expect(shouldNotHaveHeader('Set-Cookie'))
       .expect(200, 'session', done)
