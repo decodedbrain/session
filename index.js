@@ -112,10 +112,10 @@ function session(options) {
   var saveUninitializedSession = opts.saveUninitialized
 
   var isCookieConfigurationSet = opts.cookie !== null;
-
   var headerName = opts.header;
-
+  debug("headerName: ",headerName);
   var headerNameNormalized = headerName? headerName.toLowerCase() : null;
+  debug("headerNameNormalized: ",headerNameNormalized);
 
   // get the cookie signing secret
   var secret = opts.secret
@@ -163,6 +163,7 @@ function session(options) {
   // generates the new session
   store.generate = function(req){
     req.sessionID = generateId(req);
+    req.token = "s:"+signature.sign(req.sessionID,secret[0]);
     req.session = new Session(req);
 
     if(isCookieConfigurationSet) {
@@ -231,8 +232,11 @@ function session(options) {
     }
 
     if (headerName) {
+      debug("Set using header with name: ", headerName);
       // get the session ID from the header
-      cookieId = req.sessionID = getHeader(req, headerNameNormalized, secret);
+      // Allow previous middleware to set session ID
+      cookieId = req.sessionID || (req.sessionID = getHeader(req, headerNameNormalized, secrets[0]));
+      debug("Got cookie id", cookieId);
     }
 
     // set-cookie
@@ -265,7 +269,7 @@ function session(options) {
         touched = true
       }
       if (headerName) {
-        setHeader(res, headerName, req.sessionID, secret);
+        setHeader(res, headerName, req.sessionID, secrets[0]);
       }
     });
 
@@ -695,19 +699,23 @@ function unsigncookie(val, secrets) {
 }
 
 
-function setHeader(res, name, val, secret) {
-  var signed = 's:' + signature.sign(val, secret);
+function setHeader(res, name, val, secrets) {
+  var signed = 's:' + signature.sign(val, secrets);
+  debug("setHeader signed: ",signed);
   debug(name + ' %s', signed);
-   res.setHeader(name, signed);
+  res.setHeader(name, signed);
 }
- function getHeader(req, name, secret) {
+
+function getHeader(req, name, secret) {
   var header = req.headers[name];
+  debug("Header name: ", name)
+  debug("Header value", header)
   var val;
    // read from header
   if (header) {
     if (header.substr(0, 2) === 's:') {
       val = signature.unsign(header.slice(2), secret);
-       if (val === false) {
+      if (val === false) {
         debug('header signature invalid');
         val = undefined;
       }
@@ -715,5 +723,6 @@ function setHeader(res, name, val, secret) {
       debug('header unsigned')
     }
   }
-   return val;
+  debug("getHeader val: ", val);
+  return val;
 }
