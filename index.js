@@ -111,6 +111,10 @@ function session(options) {
   // get the save uninitialized session option
   var saveUninitializedSession = opts.saveUninitialized
 
+  var isCookieConfigurationSet = opts.cookie !== null;
+
+  var headerName = opts.header ? opts.header.toLowerCase() : null;
+
   // get the cookie signing secret
   var secret = opts.secret
 
@@ -158,9 +162,12 @@ function session(options) {
   store.generate = function(req){
     req.sessionID = generateId(req);
     req.session = new Session(req);
-    req.session.cookie = new Cookie(cookieOptions);
 
-    if (cookieOptions.secure === 'auto') {
+    if(isCookieConfigurationSet) {
+      req.session.cookie = new Cookie(cookieOptions);
+    }
+
+    if (isCookieConfigurationSet && cookieOptions.secure === 'auto') {
       req.session.cookie.secure = issecure(req, trustProxy);
     }
   };
@@ -191,9 +198,11 @@ function session(options) {
       return
     }
 
-    // pathname mismatch
-    var originalPath = parseUrl.original(req).pathname || '/'
-    if (originalPath.indexOf(cookieOptions.path || '/') !== 0) return next();
+    if (isCookieConfigurationSet) {
+      // pathname mismatch
+      var originalPath = parseUrl.original(req).pathname || '/'
+      if (originalPath.indexOf(cookieOptions.path || '/') !== 0) return next();
+    }
 
     // ensure a secret is available or bail
     if (!secret && !req.secret) {
@@ -212,9 +221,17 @@ function session(options) {
 
     // expose store
     req.sessionStore = store;
+    var cookieId;
 
-    // get the session ID from the cookie
-    var cookieId = req.sessionID = getcookie(req, name, secrets);
+    if (isCookieConfigurationSet) {
+      // get the session ID from the cookie
+      cookieId = req.sessionID = getcookie(req, name, secrets);
+    }
+
+    if (headerName) {
+      // get the session ID from the header
+      cookieId = req.sessionID = getHeader(req, headerNameNormalized, secret);
+    }
 
     // set-cookie
     onHeaders(res, function(){
@@ -227,10 +244,17 @@ function session(options) {
         return;
       }
 
+      if (isCookieConfigurationSet) {
       // only send secure cookies via https
-      if (req.session.cookie.secure && !issecure(req, trustProxy)) {
-        debug('not secured');
-        return;
+        if (req.session.cookie.secure && !issecure(req, trustProxy)) {
+          debug('not secured');
+          return;
+        }
+        if (!shouldSetCookie(req)) {
+          return;
+        }
+        // set cookie
+        setcookie(res, name, req.sessionID, secrets[0], req.session.cookie.data);
       }
 
       if (!touched) {
@@ -238,9 +262,6 @@ function session(options) {
         req.session.touch()
         touched = true
       }
-
-      // set cookie
-      setcookie(res, name, req.sessionID, secrets[0], req.session.cookie.data);
     });
 
     // proxy end() to commit the session
@@ -666,4 +687,28 @@ function unsigncookie(val, secrets) {
   }
 
   return false;
+}
+
+
+function setHeader(res, name, val, secret) {
+  var signed = 's:' + signature.sign(val, secret);
+  debug(name + ' %s', signed);
+   res.setHeader(name, signed);
+}
+ function getHeader(req, name, secret) {
+  var header = req.headers[name];
+  var val;
+   // read from header
+  if (header) {
+    if (header.substr(0, 2) === 's:') {
+      val = signature.unsign(header.slice(2), secret);
+       if (val === false) {
+        debug('header signature invalid');
+        val = undefined;
+      }
+    } else {
+      debug('header unsigned')
+    }
+  }
+   return val;
 }
