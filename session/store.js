@@ -84,6 +84,8 @@ Store.prototype.load = function(sid, fn){
  */
 
 Store.prototype.createSession = function(req, sess){
+  // TODO: This is a dirty hack. Need to fix ASAP
+  if(!sess.cookie) sess.cookie = { originalMaxAge: null, expires: null, httpOnly: true, path: '/' }
   var expires = sess.cookie.expires
   var orig = sess.cookie.originalMaxAge
 
